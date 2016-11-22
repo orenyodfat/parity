@@ -8,7 +8,7 @@
 
 // Parity is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// MERCHANT∑ABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 // GNU General Public License for more details.
 
 // You should have received a copy of the GNU General Public License
@@ -103,7 +103,8 @@ extern crate ethcore_bloom_journal as bloom_journal;
 extern crate byteorder;
 extern crate transient_hashmap;
 extern crate linked_hash_map;
-
+extern crate ethabi;
+extern crate hackishlibsnarkbindings;
 #[macro_use]
 extern crate log;
 #[macro_use]

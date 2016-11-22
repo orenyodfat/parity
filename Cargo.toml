@@ -47,6 +47,7 @@ rlp = { path = "util/rlp" }
 ethcore-stratum = { path = "stratum" }
 ethcore-dapps = { path = "dapps", optional = true }
 clippy = { version = "0.0.96", optional = true}
+ethabi = { git = "https://github.com/gancherj/ethabi.git" }
 
 [target.'cfg(windows)'.dependencies]
 winapi = "0.2"

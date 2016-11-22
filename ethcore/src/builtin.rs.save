@@ -22,10 +22,9 @@ use util::{U256, H256, Hashable, FixedHash, BytesRef};
 use ethkey::{Signature, recover as ec_recover};
 use ethjson;
 use ethabi;
-use hackishlibsnarkbindings;
+use tinysnark;
 use ethabi::spec::ParamType;
-use ethabi::Token;
-
+use ethabi::Toke
 /// Native implementation of a built-in contract.
 pub trait Impl: Send + Sync {
 	/// execute this built-in on the given input, writing to the given output.
@@ -85,14 +84,12 @@ impl From<ethjson::spec::Builtin> for Builtin {
 // Ethereum builtin creator.
 fn ethereum_builtin(name: &str) -> Box<Impl> {
 	match name {
-                "zksnark" => Box::new(ZkSNARK) as Box<Impl>,
 		"identity" => Box::new(Identity) as Box<Impl>,
 		"ecrecover" => Box::new(EcRecover) as Box<Impl>,
 		"sha256" => Box::new(Sha256) as Box<Impl>,
 		"ripemd160" => Box::new(Ripemd160) as Box<Impl>,
 		_ => panic!("invalid builtin name: {}", name),
 	}
-
 }
 
 // Ethereum builtins:
@@ -113,9 +110,6 @@ struct Sha256;
 
 #[derive(Debug)]
 struct Ripemd160;
-
-#[derive(Debug)]
-struct ZkSNARK;
 
 impl Impl for Identity {
 	fn execute(&self, input: &[u8], output: &mut BytesRef) {
@@ -153,7 +147,7 @@ impl Impl for EcRecover {
 
 impl Impl for Sha256 {
 	fn execute(&self, input: &[u8], output: &mut BytesRef) {
-	let mut sha = Sha256Digest::new();
+		let mut sha = Sha256Digest::new();
 		sha.input(input);
 
 		let mut out = [0; 32];
@@ -162,33 +156,6 @@ impl Impl for Sha256 {
 		output.write(0, &out);
 	}
 }
-
-impl Impl for ZkSNARK {
-        fn execute(&self,input :&[u8],output: &mut BytesRef){
-            let outlen = output.len();
-            for i in 0..output.len() {
-                output[i] = 0;
-            }
-            let abitype = [ParamType::Bytes, ParamType::Bytes, ParamType::Bytes];
-            let v = input[4..].to_vec();
-            let decode = ethabi::Decoder::decode(&abitype, v);
-            if let Ok(tokens) = decode {
-                if tokens.len() == 3 {
-                    if let Token::Bytes(ref v1) = tokens[0] {
-                        if let Token::Bytes(ref v2) = tokens[1] {
-                            if let Token::Bytes(ref v3) = tokens[2] {
-                                let res = hackishlibsnarkbindings::snark_verify(v1, v2, v3); 
-                                if res {
-                                    output[outlen - 1] = 1;
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-    }
-}
-
 
 impl Impl for Ripemd160 {
 	fn execute(&self, input: &[u8], output: &mut BytesRef) {
@@ -339,10 +306,7 @@ mod tests {
 
 	#[test]
 	fn from_named_linear() {
-		let pricer = Box::
-
-
-new(Linear { base: 10, word: 20 });
+		let pricer = Box::new(Linear { base: 10, word: 20 });
 		let b = Builtin {
 			pricer: pricer as Box<Pricer>,
 			native: ethereum_builtin("identity"),
