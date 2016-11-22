@@ -16,13 +16,13 @@
 
 use std::sync::{Arc, Mutex};
 use hyper;
-use jsonrpc_core::IoHandler;
-use jsonrpc_http_server::{ServerHandler, PanicHandler, AccessControlAllowOrigin};
+use jsonrpc_core::{IoHandler, ResponseHandler, Request, Response};
+use jsonrpc_http_server::{ServerHandler, PanicHandler, AccessControlAllowOrigin, RpcHandler};
 use endpoint::{Endpoint, EndpointPath, Handler};
 
 pub fn rpc(handler: Arc<IoHandler>, panic_handler: Arc<Mutex<Option<Box<Fn() -> () + Send>>>>) -> Box<Endpoint> {
 	Box::new(RpcEndpoint {
-		handler: handler,
+		handler: Arc::new(RpcMiddleware::new(handler)),
 		panic_handler: panic_handler,
 		cors_domain: None,
 		// NOTE [ToDr] We don't need to do any hosts validation here. It's already done in router.
@@ -31,7 +31,7 @@ pub fn rpc(handler: Arc<IoHandler>, panic_handler: Arc<Mutex<Option<Box<Fn() -> 
 }
 
 struct RpcEndpoint {
-	handler: Arc<IoHandler>,
+	handler: Arc<RpcMiddleware>,
 	panic_handler: Arc<Mutex<Option<Box<Fn() -> () + Send>>>>,
 	cors_domain: Option<Vec<AccessControlAllowOrigin>>,
 	allowed_hosts: Option<Vec<String>>,
@@ -49,3 +49,75 @@ impl Endpoint for RpcEndpoint {
 		))
 	}
 }
+
+struct RpcMiddleware {
+	handler: Arc<IoHandler>,
+}
+
+impl RpcMiddleware {
+	fn new(handler: Arc<IoHandler>) -> Self {
+		RpcMiddleware {
+			handler: handler,
+		}
+	}
+
+	fn augment_request(&self, request: &mut Request, meta: Option<Meta>) {
+		use jsonrpc_core::{Call, Params, to_value};
+
+		fn augment_call(call: &mut Call, meta: Option<&Meta>) {
+			match (call, meta) {
+				(&mut Call::MethodCall(ref mut method_call), Some(meta)) if &method_call.method == "eth_accounts" => {
+					let session = to_value(&meta.app_id);
+
+					let params = Some(Params::Array(match method_call.params {
+						Some(Params::Array(ref mut array)) => {
+							array.push(session);
+							array.clone()
+						},
+						_ => vec![session],
+					}));
+
+					method_call.params = params;
+				},
+				_ => {}
+			}
+		}
+
+		match *request {
+			Request::Single(ref mut call) => augment_call(call, meta.as_ref()),
+			Request::Batch(ref mut vec) => {
+				for mut call in vec {
+					augment_call(call, meta.as_ref())
+				}
+			},
+		}
+	}
+}
+
+struct Meta {
+	app_id: String
+}
+
+impl RpcHandler for RpcMiddleware {
+	type Metadata = Meta;
+
+	fn read_metadata(&self, request: &hyper::server::Request<hyper::net::HttpStream>) -> Option<Self::Metadata> {
+		None
+	}
+
+	fn handle_request<H>(&self, request_str: &str, response_handler: H, meta: Option<Self::Metadata>) where
+		H: ResponseHandler<Option<String>, Option<String>> + 'static
+	{
+		let handler = IoHandler::convert_handler(response_handler);
+		let request = IoHandler::read_request(request_str);
+
+		match request {
+			Ok(mut request) => {
+				self.augment_request(&mut request, meta);
+				self.handler.request_handler().handle_request(request, handler, None)
+			},
+			Err(error) => handler.send(Some(Response::from(error))),
+		}
+	}
+}
+
